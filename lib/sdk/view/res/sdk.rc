@@ -1,0 +1,22 @@
+<RCC>
+    <qresource prefix="/" >
+        <file>images/feedback_hovered.png</file>
+        <file>images/feedback_normal.png</file>
+
+        <file>images/img_addtomenubar.png</file>
+        <file>images/bg_tips.png</file>
+
+        <file>images/gray.png</file>
+        <file>images/bg_popup.png</file>
+        <file>images/ic_add.png</file>
+
+        <file>images/addtotoolbar.png</file>
+        <file>images/addtotoolbar_added.png</file>
+        <file>images/bulb_large.png</file>        
+
+        <file>images/ic_radiobox.png</file>
+        <file>images/ic_radiobox_selected.png</file>
+
+        <file>images/webloading.gif</file>
+    </qresource>
+</RCC>
