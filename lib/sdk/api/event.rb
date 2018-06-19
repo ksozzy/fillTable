@@ -49,12 +49,20 @@ module KSO_SDK
 
     def initialize()
       @activeEvent = Event.new(eventTarget: KSO_SDK::Application, eventName: 'WindowActivate')
+      @afterSaveEvent = Event.new(eventTarget: KSO_SDK::Application, eventName: 'WorkbookAfterSave')      
     end
 
     # 绑定文档切换
     def bindActive(&block)
       @activeEvent.connect do | page, wa |
-        block.call(KSO_SDK::ActivePage().FullName)
+        block.call(KSO_SDK::activePage().FullName)
+      end
+    end
+
+    # 绑定文档保存事件
+    def bindAfterSave(&block)
+      @afterSaveEvent.connect do | page, wa |
+        block.call(KSO_SDK::activePage().FullName)
       end
     end
 

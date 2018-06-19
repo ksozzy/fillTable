@@ -8,6 +8,7 @@ module KSO_SDK::Web
 
   if KSO_SDK::isEt
 
+    # 具有回调JS事件基类
     class BaseEvent
 
       attr_accessor :owner, :context
@@ -34,83 +35,75 @@ module KSO_SDK::Web
 
     end
 
-    class SelectionChangeEvent < BaseEvent
+    # 事件管理类
+    # 负责context与BaseEvent对象的映射关系，根据context绑定/解绑事件
+    class EventManager
 
-      def initialize(owner: owner, context: context)
-        super(owner: owner, context: context, eventTarget: KSO_SDK::Application.ActiveSheet,
-          eventName: 'SelectionChange', jsfunc: 'onSheetSelectionChange')
+      def initialize()
+        @pools = {}
       end
 
-    end
-
-    class CellChangeEvent
-
-      def initialize(owner: owner)
-        @owner = owner
-        @pools = {}
-        @eventTarget = Proc.new { KSO_SDK::Application.ActiveSheet }
-        @eventName = 'Change'
-        @jsFuncName = 'onCellChange'
+      def newEvent(context)
       end
 
       def connect(context, &block)
-        @pools[context] = newEvent(context, &block) unless @pools.has_key?(context)
+        (@pools[context] = newEvent(context)).connect(&block) unless @pools.has_key?(context)
       end
 
       def disConnect(context)
         @pools.delete(context).disConnect() if @pools.has_key?(context)
       end
 
-      def newEvent(context, &block)
-        event = BaseEvent.new(owner: @owner, context: context, eventTarget: @eventTarget.call(), eventName: @eventName, jsfunc: @jsFuncName)
-        event.connect(&block)
+    end
+
+    # 单元格选中事件
+    class SelectionChangeEvent < EventManager
+
+      def initialize(owner: owner)
+        super()
+        @owner = owner
+        @eventName = 'SelectionChange'
+        @jsFuncName = 'onSheetSelectionChange'
+      end
+
+      def newEvent(context)
+        BaseEvent.new(owner: @owner, context: context, eventTarget: KSO_SDK::Application.ActiveSheet, eventName: @eventName, jsfunc: @jsFuncName)
+      end
+    end
+
+    #单元格内容改变事件
+    class CellChangeEvent < EventManager
+
+      def initialize(owner: owner)
+        super()
+        @owner = owner
+        @eventName = 'Change'
+        @jsFuncName = 'onCellChange'
+      end
+
+      def newEvent(context)
+        event = BaseEvent.new(owner: @owner, context: context, eventTarget: KSO_SDK::Application.ActiveSheet, eventName: @eventName, jsfunc: @jsFuncName)
         event
       end
     end
 
-    class SheetActivateEvent
+    # Sheet切换事件
+    class SheetActivateEvent < EventManager
 
-      attr_accessor :owner, :context
-
-      def initialize
-      end
-  
-      def connect(context)
-        if !connected && createEvent
-          self.context = context
-          @event.on_event('SheetActivate') { |sh| 
-            josn_result = {:name => sh.Name}
-            josn_result[:context] = self.context if !self.context.nil?
-            owner.callbackToJS("onSheetActivate", josn_result.to_json)
-          }
-        end
-      end
-  
-      def disConnect
-        if connected
-          @event.on_event('SheetActivate') {
-            |sh| 
-          }
-          @event = nil
-        end
-      end
-  
-      private
-      
-      def connected
-        !@event.nil?
+      def initialize(owner: owner)
+        super()
+        @owner = owner
+        @eventName = 'SheetActivate'
+        @jsFuncName = 'onSheetActivate'
       end
 
-      def createEvent
-        if @event.nil? && !KSO_SDK::Application.ActiveWorkbook.nil?
-          @event = WIN32OLE_EVENT.new(KSO_SDK::Application.ActiveWorkbook)
-        end
-        return !@event.nil?
+      def newEvent(context)
+        BaseEvent.new(owner: @owner, context: context, eventTarget: KSO_SDK::Application.ActiveWorkbook, eventName: @eventName, jsfunc: @jsFuncName)
       end
+  
     end
   
     # Workbook切换事件
-    #
     class WorkbookActivateEvent < BaseEvent
 
       def initialize(owner:)
@@ -118,6 +111,18 @@ module KSO_SDK::Web
             eventTarget: KSO_SDK::Application,
             eventName: 'WorkbookActivate',
             jsfunc: 'onWorkbookActivate')
+      end
+
+    end
+
+    #Workbook关闭事件
+    class WorkbookCloseEvent < BaseEvent
+
+      def initialize(owner:)
+        super(owner: owner,
+          eventTarget: KSO_SDK::Application,
+          eventName: 'WorkbookBeforeClose',
+          jsfunc: 'onWorkbookClose')
       end
 
     end
@@ -146,38 +151,29 @@ module KSO_SDK::Web
       end
 
       def connectSelectionChange(context)
-        @selection_change_event = {} if @selection_change_event.nil?
-        event = SelectionChangeEvent.new(owner: self, context:context) unless @selection_change_event.has_key?(context)
-        event = event or @selection_change_event[context]
-        @selection_change_event[context] = event unless @selection_change_event.has_key?(context)
-        event.connect do | range |
+        @selection_change_event = SelectionChangeEvent.new(owner: self) if @selection_change_event.nil?
+        @selection_change_event.connect context do | range |
           {:address => range.Address}
         end
         nil
+        # nil
       end
 
       def disConnectSelectionChange(context)
-        klog @selection_change_event
-        if @selection_change_event.nil?
-          return
-        end
-        event = @selection_change_event[context]
-        event.disConnect unless event.nil?
-        @selection_change_event.delete(context)
+        @selection_change_event.disConnect(context) unless @selection_change_event.nil?
         nil
       end
 
       def connectSheetActivate(context)
-        if @sheet_activate_event.nil?
-          @sheet_activate_event = SheetActivateEvent.new
-          @sheet_activate_event.owner = self
+        @sheet_activate_event = SheetActivateEvent.new(owner: self) if @sheet_activate_event.nil?
+        @sheet_activate_event.connect context do | sh |
+          {:name => sh.Name}
         end
-        @sheet_activate_event.connect(context)
         nil
       end
 
       def disConnectSheetActivate(context)
-        @sheet_activate_event.disConnect if !@sheet_activate_event.nil?
+        @sheet_activate_event.disConnect(context) unless @sheet_activate_event.nil?
         nil
       end
 
@@ -241,12 +237,24 @@ module KSO_SDK::Web
         nil
       end
 
-      def connectWorkbookClose()
+      # def connectWorkbookClose()
         # 事件绑定在Application会造成卡死
-        @workbookClose = BaseEvent.new(owner: self, eventTarget: KSO_SDK::Application.ActiveWorkbook, eventName: 'BeforeClose', jsfunc: 'onWorkbookClose') if @workbookClose.nil?
-        @workbookClose.connect { |cancel|
-          klog cancel
-        }
+        # @workbookClose = BaseEvent.new(owner: self, eventTarget: KSO_SDK::Application.ActiveWorkbook, eventName: 'BeforeClose', jsfunc: 'onWorkbookClose') if @workbookClose.nil?
+        # @workbookClose.connect { |cancel|
+          # klog cancel
+        # }
+      # end
+
+      def connectWorkbookClose()
+        @wbCloseEvent = WorkbookCloseEvent.new(owner: self) if @wbCloseEvent.nil?
+        @wbCloseEvent.connect do | cancel, wb | # 参数乱序
+          {:workbookName => wb.name, :cancel => cancel}
+        end
+        nil
+      end
+
+      def disConnectWorkbookClose()
+        @wbCloseEvent.disConnect() unless @wbCloseEvent.nil?
       end
 
     end

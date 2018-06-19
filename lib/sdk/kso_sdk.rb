@@ -9,5 +9,6 @@ end
 
 require_relative 'api/common'
 require_relative 'api/js_api'
+require_relative 'api/broadcast'
 require_relative 'view'
 require_relative 'web'

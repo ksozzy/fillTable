@@ -58,11 +58,16 @@ module KSO_SDK::Web
       user_info = KSO_SDK.getCloudService().getUserInfo()
       if user_info.logined
         json_result = {:logined=>user_info.logined,:user_id => user_info.userId,:user_name => user_info.userName}
+        # json_result = {:logined=>user_info.logined,:user_id => user_info.userId,:user_name => user_info.userName, :user_sid => KSO_SDK.getCloudService().getLoginInfo().wpsSKey}
         return json_result.to_json()
       else
         json_result = {:logined=>user_info.logined}
         return json_result.to_json()
       end
+    end
+
+    def checkUserLogin
+      callbackToJS('userStateChanged', getUserInfo)
     end
 
     # 注册用户变化接收函数

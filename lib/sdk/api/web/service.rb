@@ -11,6 +11,7 @@ module KSO_SDK::Web
     class ServiceImpl < Qt::Object
 
       attr_accessor :network, :owner
+      attr_accessor :callbackName
 
       slots 'onFinished(QNetworkReply*)'
 
@@ -18,11 +19,16 @@ module KSO_SDK::Web
       def initialize(owner)
         super(nil)
         self.owner = owner
+        self.callbackName = "onServiceFinished"
       end
 
       def get(url)
         checkNetwork
-        self.network.get(Qt::NetworkRequest.new(Qt::Url.new(url)))
+        request = Qt::NetworkRequest.new(Qt::Url.new(url))
+        cookie = "wps_sid=#{KSO_SDK::getCloudService().getUserInfo().sessionId};"
+        request.setRawHeader(Qt::ByteArray.new('Cookie'), Qt::ByteArray.new(cookie)) if KSO_SDK::getCloudService().getUserInfo().logined
+        klog request.rawHeader(Qt::ByteArray.new('Cookie'))
+        self.network.get(request)
       end
 
       private
@@ -36,28 +42,36 @@ module KSO_SDK::Web
         end
         begin
           josn[:context] = reply.objectName() unless reply.objectName().nil?
-          owner.callbackToJS("onServiceFinished", josn.to_json)
+          owner.callbackToJS(callbackName, josn.to_json)
         rescue
         end
-        klog '[Network:', reply.url.toString(), josn.to_json, 'End]'
+        klog '[Network:', reply.url.toString(), *getHeaders(reply.request()), josn.to_json, 'End]'
         reply.deleteLater
+      end
+
+      def getHeaders(request)
+        list = ['Headers:']
+        request.rawHeaderList().each do |header|
+          list << "#{header}:#{request.rawHeader(Qt::ByteArray.new("Cookie")).data}"
+        end
+        list << 'Headers End'
+        return *list
       end
 
       def checkNetwork
         if self.network.nil?
           self.network = Qt::NetworkAccessManager.new(self)
-          sid = KSO_SDK.getCloudService().getUserInfo().sessionId
-          cookieJar = Qt::NetworkCookieJar.new()
-          cookie = Qt::NetworkCookie.new(Qt::ByteArray.new('wps_sid'), Qt::ByteArray.new(sid))
-          cookieJar.setCookiesFromUrl([cookie], Qt::Url.new('http://assist.docer.wps.cn/'))
-          self.network.setCookieJar(cookieJar)
           connect(self.network, SIGNAL('finished(QNetworkReply *)'),
             self, SLOT('onFinished(QNetworkReply *)'))
         end
+
       end
-    end
-  end
+
+    end # end ServiceImpl
+
+  end # end Internal
   
+
   class Service < KSO_SDK::JsBridge
 
     def initialize
@@ -72,11 +86,22 @@ module KSO_SDK::Web
 
     def dbCreatUniqueFileId(context = nil)
       hash = baseInfo
-
       dbGet(toUrl("getfileid?", hash.sort), context)
     end
 
-    def dbPostData(file_id, table, key, value, include_user = false, context = nil)
+    def dbPostData(file_id: nil, table:, key:, value:, include_user: false, context: nil)
+      postDbData(file_id, table, key, value, include_user, context)
+    end
+
+    def dbPostCommonData(table, key, value, context = nil)
+      postDbData("00000000-0000-0000-0000-000000000000", table, key, value, false, context)
+    end
+
+    def dbPostUserData(table, key, value, context = nil)
+      postDbData(nil, table, key, value, true, context)
+    end
+
+    def postDbData(file_id, table, key, value, include_user = false, context = nil)
       hash = baseInfo
       hash.delete(:user_id) unless include_user
       hash[:file_id] = file_id unless file_id.nil?
@@ -84,28 +109,30 @@ module KSO_SDK::Web
       if value.kind_of?(Hash)
         hash[key.to_sym] = value.to_json
       else
-        hash[key.to_sym] = value
+        hash[key.to_sym] = value.to_s
       end
-
       dbGet(toUrl("edit?", hash.sort), context)
     end
-
-    def dbPostCommonData(table, key, value, context = nil)
-      dbPostData(nil, table, key, value, true, context)
+  
+    def dbGetData(file_id:nil, table:, include_comm: false, include_users: true, context: nil)
+      getDbData(file_id, table, include_comm, include_users, context)
     end
-    
-    def dbGetData(file_id, table, include_comm = false, include_users = true, context = nil)
+
+    def getDbData(file_id, table, include_comm = false, include_users = true, context = nil)
       hash = baseInfo
       hash[:file_id] = file_id unless file_id.nil?
       hash[:table] = table
       hash[:include_comm] = include_comm
       hash.delete(:user_id) if include_users
-
       dbGet(toUrl("get?", hash.sort), context)
     end
 
     def dbGetCommonData(table, context = nil)
-      dbGetData(nil, table, false, true, context)
+      getDbData("00000000-0000-0000-0000-000000000000", table, true, true, context)
+    end
+
+    def dbGetUserData(table, context = nil)
+      getDbData(nil, table, false, false, context)
     end
 
     def dbRemoveData(file_id, table, context)
@@ -113,38 +140,21 @@ module KSO_SDK::Web
       hash[:file_id] = file_id
       hash[:table] = table
       hash[:is_dev] = false
-
       dbGet(toUrl("remove?", hash.sort), context)
     end
 
-    private
-
-    def toSign(hash)
-      sign_temp = ""
-      hash.each do |key, val|
-        sign_temp << "#{key}=#{val}"
-      end
-
-      sign_temp << "#{self.context.appKey}"
-      puts sign_temp
-      Digest::MD5.hexdigest(sign_temp)
-    end
-
     def toUrl(head, hash)
-      url = "http://assist.docer.wps.cn/mongotest/" << head
-      hash.each_with_index do | entry, index|
-        key = entry[0]
-        val = entry[1]
-        if index == 0
-          url << "#{key}=#{val}"
-        else
-          url << "&#{key}=#{val}"
-        end
+      checkAssistant
+
+      keys = Array.new
+      values = Array.new
+
+      hash.each do |key, val|
+        keys << Qt::Variant.new(key.to_s)
+        values << Qt::Variant.new(val.to_s)
       end
 
-      sign = toSign(hash)
-      url << "&sign=#{sign}"
-
+      url = assistant.makeUrl(head, Qt::Variant.new(keys), Qt::Variant.new(values))
       return url
     end
 
@@ -155,11 +165,23 @@ module KSO_SDK::Web
         :is_dev => self.context.isDev
       }
       if KSO_SDK.getCloudService().getUserInfo().logined
-				info[:user_id] = KSO_SDK.getCloudService().getUserInfo().userId.to_s
+        info[:user_id] = KSO_SDK.getCloudService().getUserInfo().userId.to_s
       end
       info
     end
 
-  end
+    def checkAssistant
+      @assistant = KSmokeDbAssistant.new(context.dbService) if assistant.nil?
+    end
+    
+    private :toUrl, :baseInfo, :postDbData, :getDbData, :dbGet
 
-end
+    private
+
+    def assistant
+      @assistant
+    end
+
+  end # end Service
+  
+end # end module

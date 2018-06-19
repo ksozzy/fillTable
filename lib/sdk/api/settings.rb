@@ -28,12 +28,21 @@ module KSO_SDK
       return !read(key, nil).nil?
     end
 
-    def readBool(key)
+    def readBool(key, default = false)
       val = read(key, nil)
-      return false if val.nil?
+      return default if val.nil?
       val.toBool()
     end
   
+    def readInt(key, default = false)
+      val = read(key, nil)
+      return default if val.nil?
+      val.toInt()
+    end
+  
+    def remove(key)
+      @settings.remove(key)
+    end
   end
 
   

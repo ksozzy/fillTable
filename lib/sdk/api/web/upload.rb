@@ -51,8 +51,6 @@ module KSO_SDK::Web
   # JS上传接口
   class Upload < KSO_SDK::JsBridge
 
-    attr_accessor :uploader
-
     public
 
     # 上传文件到金山云
@@ -60,8 +58,8 @@ module KSO_SDK::Web
     # locate_file: 本地文件
 
     def upLoadFile(locate_file)
-      if self.uploader.nil?
-        self.uploader = Internal::Uploader.new()
+      if uploader.nil?
+        @uploader = Internal::Uploader.new()
         uploader.onFileUploadStarting = lambda do |folderId, fileId|
           fileUploadStarting(folderId, fileId)
         end
@@ -72,7 +70,7 @@ module KSO_SDK::Web
           uploadFileFailed(folderId, fileId, fileName)
         end
       end
-      self.uploader.upLoadFile(context, locate_file)
+      uploader.upLoadFile(context, locate_file)
       nil
     end
 
@@ -92,6 +90,10 @@ module KSO_SDK::Web
     def uploadFileFailed(folderId, fileId, fileName)
       josn_result = {:file_id => fileId, :file_name => fileName}
       callbackToJS("onUploadFileFailed", josn_result.to_json)
+    end
+
+    def uploader
+      @uploader
     end
 
   end

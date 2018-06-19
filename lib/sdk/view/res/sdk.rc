@@ -18,5 +18,12 @@
         <file>images/ic_radiobox_selected.png</file>
 
         <file>images/webloading.gif</file>
+
+        <file>images/ic_share_normal.png</file>
+        <file>images/ic_share_hover.png</file>
+        <file>images/bg_share.png</file>
+        <file>images/bg_share@2x.png</file>
+        <file>images/exit_share.png</file>
+        <file>images/exit_share@2x.png</file>
     </qresource>
 </RCC>

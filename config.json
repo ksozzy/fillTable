@@ -1,11 +1,13 @@
 {
-  "appId" : "assistant_client_02",
-  "appKey" : "hf389xjs902rjfj",
+  "appId" : "assistant_client_f001",
   "scriptId" : "client1",
   "appDb" : "f5394eef-e576-4709-9e4b-a7c231bd34a4",
+  "dbService" : "http://assist.docer.wps.cn/mongotest/",
   "isDev" : false,
   "feedbackUrl" : "http://support.qq.com/product/26818",
   "bindPage" : false,
-  "title" : "WPS小程序",
-  "icon" : "abc"
+  "title" : "填表助手",
+  "icon" : "abc",
+  "action" : "AIOffice",
+  "shareUrl" : "ksocustomprotocol://dockerWpp/http://10.13.90.213:82/10001950.pptx"
 }

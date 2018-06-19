@@ -159,7 +159,7 @@ module KSO_SDK::View
     # :nodoc:all
     class Dialog < Qt::Dialog
 
-        def initialize(parent = KSO_SDK.getCurrentMainWindow())
+        def initialize(parent = nil)
             super(parent)
 
             KSO_SDK::Style.addObject(self)
@@ -175,7 +175,7 @@ module KSO_SDK::View
         def initialize(parent = nil)
             super(parent)
 
-            Style.addObject(self)
+            KSO_SDK::Style.addObject(self)
         end
 
         ComponentDefinition::defineAll self

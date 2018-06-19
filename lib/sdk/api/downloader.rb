@@ -29,8 +29,9 @@ module KSO_SDK
 
     attr_writer :onProgress, :onSuccess, :onError
 
-    def initialize()
+    def initialize(context)
       super(nil)
+      @context = context
       @taskQueue = {}
       @taskSize = {}
     end
@@ -48,10 +49,16 @@ module KSO_SDK
       return task
     end
 
-    def download(url)
-      savePath, fileSize = getTempSavePath(url)
-      if savePath.nil?
-        return -1, nil
+    def download(url, local_file = nil)
+      savePath = nil
+      fileSize = 0
+      if local_file.nil?
+        savePath, fileSize = getTempSavePath(url)
+        if savePath.nil?
+          return -1, nil
+        end
+      else
+        savePath = local_file
       end
       if File.exist?(savePath)
         onDownloadSuccess(0, savePath)
@@ -86,9 +93,7 @@ module KSO_SDK
     end
 
     def makeTempDir
-      @tempDir = "#{KxUtil.getOfficeHome}/cache"
-      Dir.mkdir(@tempDir) if !Dir.exists?(@tempDir)
-      @tempDir += "/paper"
+      @tempDir = File.join(KSO_SDK.getStorageDir(@context), 'cache')
       Dir.mkdir(@tempDir) if !Dir.exists?(@tempDir)
     end
 
@@ -117,10 +122,11 @@ module KSO_SDK
           filename = filename.split(regex)          
           filename = URI::unescape(filename[1])
         end
-        return @tempDir + "/" + filename, fileSize.to_i
       else
-        return nil, 0
+        fileSize = response['Content-Length']
+        filename = path.split('/')[-1]
       end
+      return @tempDir + "/" + filename, fileSize.to_i
     end
   end
 end

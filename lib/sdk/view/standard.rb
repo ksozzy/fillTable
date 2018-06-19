@@ -90,12 +90,20 @@ module KSO_SDK::View
         def self.defineByParameter(name, parameter_statement = "")
             event_name = name.to_s.gsub(/\b\w/) { $&.upcase }
             self.class_eval(
-                "def on#{event_name}=(slot);
-                   if !parent.nil?
+                "
+                def on#{event_name}=(slot);
+                   if !parent.nil? && !slot.nil?
                         parent.class.class_eval(\" slots   '\#{slot}(#{parameter_statement})'\")
                         connect(self, SIGNAL('#{name}(#{parameter_statement})'), parent, SLOT(\"\#{slot}(#{parameter_statement})\"))
                     end;
-                end"
+                end
+
+                def on#{event_name}(&block)
+                    self.connect SIGNAL('#{name}(#{parameter_statement})') do | *args |
+                        block.call(*args)
+                    end
+                end
+                "
                 ) 
         end
 
